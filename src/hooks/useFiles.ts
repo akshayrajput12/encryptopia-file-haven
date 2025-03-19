@@ -178,6 +178,8 @@ export const useFiles = (parentId?: string | null) => {
       
       if (!data) throw new Error('File not found');
       
+      let fileToDownload: Blob;
+      
       // Check if file is password protected
       if (file.metadata?.isPasswordProtected) {
         if (!password) {
@@ -401,8 +403,8 @@ export const useFiles = (parentId?: string | null) => {
       
       // Create file reader to get original file content
       const fileReader = new FileReader();
-      const filePromise = new Promise<string>((resolve, reject) => {
-        fileReader.onload = () => resolve(fileReader.result as string);
+      const filePromise = new Promise<ArrayBuffer>((resolve, reject) => {
+        fileReader.onload = () => resolve(fileReader.result as ArrayBuffer);
         fileReader.onerror = reject;
         fileReader.readAsArrayBuffer(data);
       });
