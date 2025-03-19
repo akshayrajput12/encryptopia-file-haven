@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useFiles } from "@/hooks/useFiles";
 import type { FileItem } from "@/lib/supabase";
@@ -15,6 +14,12 @@ import {
   Search,
   Grid3X3,
   List,
+  FileText,
+  Image,
+  Film,
+  File,
+  Music,
+  Code
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -357,8 +362,6 @@ function FileTypeIcon({ type, size = "md" }: FileTypeIconProps) {
 
 // Helper to get the right icon for file type
 function getFileIcon(extension: string) {
-  const { FileText, Image, Film, File, Music, Code } = require("lucide-react");
-  
   // Simplified mapping of extensions to icons
   const iconMap: Record<string, any> = {
     // Images
