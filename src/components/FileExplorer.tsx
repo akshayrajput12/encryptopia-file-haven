@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useFiles } from "@/hooks/useFiles";
-import { FileItem } from "@/lib/supabase";
+import type { FileItem } from "@/lib/supabase";
 import { FileActions } from "@/components/FileActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
