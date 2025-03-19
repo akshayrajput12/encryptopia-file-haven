@@ -9,7 +9,151 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      file_shares: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          file_id: string | null
+          id: string
+          permission: string
+          shared_by: string
+          shared_with: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          file_id?: string | null
+          id?: string
+          permission: string
+          shared_by: string
+          shared_with: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          file_id?: string | null
+          id?: string
+          permission?: string
+          shared_by?: string
+          shared_with?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_shares_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_shares_shared_by_fkey"
+            columns: ["shared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_shares_shared_with_fkey"
+            columns: ["shared_with"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          created_at: string | null
+          encryption_key: string | null
+          id: string
+          is_encrypted: boolean | null
+          is_shared: boolean | null
+          metadata: Json | null
+          name: string
+          owner_id: string
+          parent_id: string | null
+          path: string
+          size: number
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          encryption_key?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          is_shared?: boolean | null
+          metadata?: Json | null
+          name: string
+          owner_id: string
+          parent_id?: string | null
+          path: string
+          size: number
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          encryption_key?: string | null
+          id?: string
+          is_encrypted?: boolean | null
+          is_shared?: boolean | null
+          metadata?: Json | null
+          name?: string
+          owner_id?: string
+          parent_id?: string | null
+          path?: string
+          size?: number
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          last_sign_in: string | null
+          two_factor_enabled: boolean | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          last_sign_in?: string | null
+          two_factor_enabled?: boolean | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          last_sign_in?: string | null
+          two_factor_enabled?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
