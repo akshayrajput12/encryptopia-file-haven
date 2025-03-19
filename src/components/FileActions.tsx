@@ -14,6 +14,8 @@ import {
   ChevronDown,
   Lock,
   Info,
+  KeyRound,
+  Shield,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PasswordProtection, PasswordProtectedViewer } from "./PasswordProtection";
 
 interface FileActionsProps {
   file: FileItem;
@@ -48,15 +51,28 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
   const [metadataDialog, setMetadataDialog] = useState(false);
+  const [passwordDialog, setPasswordDialog] = useState(false);
+  const [enterPasswordDialog, setEnterPasswordDialog] = useState(false);
+  const [resetPasswordDialog, setResetPasswordDialog] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
   const [sharePermission, setSharePermission] = useState<"read" | "write" | "admin">("read");
   const [metadata, setMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [decryptedFile, setDecryptedFile] = useState<Blob | null>(null);
+  const [previewDialog, setPreviewDialog] = useState(false);
 
   const isFolder = file.type === "folder";
+  const isPasswordProtected = file.metadata?.isPasswordProtected === true;
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Check if file is password protected
+    if (isPasswordProtected) {
+      setEnterPasswordDialog(true);
+      return;
+    }
+    
     await downloadFile(file.id);
   };
 
@@ -90,6 +106,20 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     if (data) {
       setMetadata(data);
       setMetadataDialog(true);
+    }
+  };
+
+  const handlePasswordSuccess = (decrypted: Blob) => {
+    setDecryptedFile(decrypted);
+    setPreviewDialog(true);
+  };
+
+  const handlePreview = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Check if file is password protected
+    if (isPasswordProtected) {
+      setEnterPasswordDialog(true);
     }
   };
 
@@ -142,6 +172,10 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handlePreview}>
+            <Eye className="mr-2 h-4 w-4" />
+            Preview
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={handleDownload}>
             <Download className="mr-2 h-4 w-4" />
             Download
@@ -159,12 +193,38 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
             <Info className="mr-2 h-4 w-4" />
             Details
           </DropdownMenuItem>
-          {file.is_encrypted && (
-            <DropdownMenuItem disabled>
-              <Lock className="mr-2 h-4 w-4" />
-              Encrypted
+          
+          {/* Password protection menu items */}
+          <DropdownMenuSeparator />
+          
+          {isPasswordProtected ? (
+            <>
+              <DropdownMenuItem className="text-amber-500">
+                <Lock className="mr-2 h-4 w-4" />
+                Password Protected
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setResetPasswordDialog(true);
+                }}
+              >
+                <KeyRound className="mr-2 h-4 w-4" />
+                Reset Password
+              </DropdownMenuItem>
+            </>
+          ) : (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                setPasswordDialog(true);
+              }}
+            >
+              <Shield className="mr-2 h-4 w-4" />
+              Set Password
             </DropdownMenuItem>
           )}
+          
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={(e) => {
@@ -315,6 +375,12 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-x-4 px-4 py-2">
+                      <div className="text-sm text-muted-foreground">Password Protected</div>
+                      <div className="col-span-2 text-sm">
+                        {metadata.metadata?.isPasswordProtected ? "Yes" : "No"}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-4 px-4 py-2">
                       <div className="text-sm text-muted-foreground">Shared</div>
                       <div className="col-span-2 text-sm">
                         {file.is_shared ? "Yes" : "No"}
@@ -366,6 +432,46 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Set password dialog */}
+      <PasswordProtection 
+        file={file}
+        isOpen={passwordDialog}
+        onClose={() => setPasswordDialog(false)}
+        mode="set"
+      />
+
+      {/* Enter password dialog */}
+      <PasswordProtection 
+        file={file}
+        isOpen={enterPasswordDialog}
+        onClose={() => setEnterPasswordDialog(false)}
+        onSuccess={handlePasswordSuccess}
+        mode="enter"
+      />
+
+      {/* Reset password dialog */}
+      <PasswordProtection 
+        file={file}
+        isOpen={resetPasswordDialog}
+        onClose={() => setResetPasswordDialog(false)}
+        mode="reset"
+      />
+
+      {/* File preview dialog */}
+      {decryptedFile && (
+        <Dialog open={previewDialog} onOpenChange={setPreviewDialog}>
+          <DialogContent className="sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{file.name}</DialogTitle>
+            </DialogHeader>
+            <PasswordProtectedViewer 
+              file={file} 
+              decryptedFile={decryptedFile} 
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

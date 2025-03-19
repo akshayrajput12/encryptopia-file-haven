@@ -2,7 +2,13 @@
 import { useState, useEffect } from 'react';
 import { supabase, FileItem, handleSupabaseError, STORAGE_BUCKETS } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { encryptFile, decryptFile } from '@/lib/encryption';
+import { 
+  encryptFile, 
+  decryptFile, 
+  encryptFileWithPassword, 
+  decryptFileWithPassword, 
+  verifyPassword 
+} from '@/lib/encryption';
 import { validateFileContent } from '@/lib/security';
 import { useAuth } from './useAuth';
 
@@ -53,7 +59,7 @@ export const useFiles = (parentId?: string | null) => {
   }, [user, parentId]);
 
   // Upload file
-  const uploadFile = async (file: File, encrypt: boolean = false, parentId?: string) => {
+  const uploadFile = async (file: File, encrypt: boolean = false, password?: string, parentId?: string) => {
     try {
       if (!user) throw new Error('Not authenticated');
       
@@ -71,9 +77,22 @@ export const useFiles = (parentId?: string | null) => {
       // Process file
       let fileToUpload = file;
       let encryptionKey = null;
+      let salt = null;
+      let verificationHash = null;
+      let isPasswordProtected = false;
       
-      // Encrypt if requested
-      if (encrypt) {
+      // Encrypt with password if provided
+      if (password) {
+        const { encryptedFile, salt: passwordSalt, verificationHash: passwordHash } = 
+          await encryptFileWithPassword(file, password);
+        
+        fileToUpload = encryptedFile;
+        salt = passwordSalt;
+        verificationHash = passwordHash;
+        isPasswordProtected = true;
+      }
+      // Regular encryption if requested and no password
+      else if (encrypt) {
         const { encryptedFile, key } = await encryptFile(file);
         fileToUpload = encryptedFile;
         encryptionKey = key;
@@ -97,11 +116,14 @@ export const useFiles = (parentId?: string | null) => {
         owner_id: user.id,
         path: filePath,
         parent_id: parentId || null,
-        is_encrypted: encrypt,
+        is_encrypted: encrypt || isPasswordProtected,
         encryption_key: encryptionKey,
         is_shared: false,
         metadata: {
           lastModified: file.lastModified,
+          isPasswordProtected: isPasswordProtected,
+          salt: salt,
+          verificationHash: verificationHash
         },
       };
       
@@ -127,7 +149,7 @@ export const useFiles = (parentId?: string | null) => {
   };
 
   // Download file
-  const downloadFile = async (fileId: string) => {
+  const downloadFile = async (fileId: string, password?: string) => {
     try {
       if (!user) throw new Error('Not authenticated');
       
@@ -156,10 +178,35 @@ export const useFiles = (parentId?: string | null) => {
       
       if (!data) throw new Error('File not found');
       
-      // Decrypt if encrypted
-      let fileToDownload = data;
-      if (file.is_encrypted && file.encryption_key) {
+      // Check if file is password protected
+      if (file.metadata?.isPasswordProtected) {
+        if (!password) {
+          return { needsPassword: true, file };
+        }
+        
+        // Decrypt with password
+        const salt = file.metadata.salt;
+        const verificationHash = file.metadata.verificationHash;
+        
+        const { success, decryptedFile } = await decryptFileWithPassword(
+          data, 
+          password, 
+          salt, 
+          verificationHash
+        );
+        
+        if (!success || !decryptedFile) {
+          return { success: false, message: 'Incorrect password' };
+        }
+        
+        fileToDownload = decryptedFile;
+      }
+      // Regular decryption if encrypted but not password protected
+      else if (file.is_encrypted && file.encryption_key) {
         fileToDownload = await decryptFile(data, file.encryption_key);
+      } else {
+        // Not encrypted
+        fileToDownload = data;
       }
       
       // Create download link
@@ -172,9 +219,233 @@ export const useFiles = (parentId?: string | null) => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      return true;
+      return { success: true };
     } catch (error) {
       handleSupabaseError(error, 'Download failed');
+      return { success: false, message: 'Download failed' };
+    }
+  };
+
+  // Verify file password and get decrypted file
+  const verifyFilePassword = async (fileId: string, password: string) => {
+    try {
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get file details
+      const { data: fileData, error: fileError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
+        
+      if (fileError) throw fileError;
+      
+      const file = fileData as FileItem;
+      
+      // Download from storage
+      const { data, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .download(file.path);
+        
+      if (downloadError) throw downloadError;
+      
+      if (!data) throw new Error('File not found');
+      
+      // Check if file is password protected
+      if (!file.metadata?.isPasswordProtected) {
+        throw new Error('File is not password protected');
+      }
+      
+      // Verify and decrypt with password
+      const salt = file.metadata.salt;
+      const verificationHash = file.metadata.verificationHash;
+      
+      const result = await decryptFileWithPassword(
+        data, 
+        password, 
+        salt, 
+        verificationHash
+      );
+      
+      return result;
+    } catch (error) {
+      handleSupabaseError(error, 'Password verification failed');
+      return { success: false };
+    }
+  };
+
+  // Set password for a file
+  const setFilePassword = async (fileId: string, password: string) => {
+    try {
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get file details
+      const { data: fileData, error: fileError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
+        
+      if (fileError) throw fileError;
+      
+      const file = fileData as FileItem;
+      
+      // Check ownership
+      if (file.owner_id !== user.id) {
+        throw new Error('You do not have permission to modify this file');
+      }
+      
+      // Check if file is already password protected
+      if (file.metadata?.isPasswordProtected) {
+        throw new Error('File is already password protected');
+      }
+      
+      // Download from storage
+      const { data, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .download(file.path);
+        
+      if (downloadError) throw downloadError;
+      
+      if (!data) throw new Error('File not found');
+      
+      // Decrypt if file is already encrypted
+      let decryptedFile: Blob;
+      if (file.is_encrypted && file.encryption_key) {
+        decryptedFile = await decryptFile(data, file.encryption_key);
+      } else {
+        decryptedFile = data;
+      }
+      
+      // Convert blob to File
+      const originalFile = new File([decryptedFile], file.name, {
+        type: file.type,
+        lastModified: file.metadata?.lastModified || Date.now(),
+      });
+      
+      // Encrypt with password
+      const { encryptedFile, salt, verificationHash } = 
+        await encryptFileWithPassword(originalFile, password);
+      
+      // Update file in storage
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .update(file.path, encryptedFile);
+        
+      if (uploadError) throw uploadError;
+      
+      // Update file record in database
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({
+          is_encrypted: true,
+          encryption_key: null, // Remove old encryption key
+          metadata: {
+            ...file.metadata,
+            isPasswordProtected: true,
+            salt,
+            verificationHash
+          }
+        })
+        .eq('id', fileId);
+        
+      if (updateError) throw updateError;
+      
+      // Refresh file list
+      fetchFiles();
+      
+      return true;
+    } catch (error) {
+      handleSupabaseError(error, 'Failed to set password');
+      return false;
+    }
+  };
+
+  // Reset password for a file
+  const resetFilePassword = async (fileId: string, newPassword: string) => {
+    try {
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get file details
+      const { data: fileData, error: fileError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
+        
+      if (fileError) throw fileError;
+      
+      const file = fileData as FileItem;
+      
+      // Check ownership
+      if (file.owner_id !== user.id) {
+        throw new Error('You do not have permission to modify this file');
+      }
+      
+      // Check if file is password protected
+      if (!file.metadata?.isPasswordProtected) {
+        throw new Error('File is not password protected');
+      }
+      
+      // Download from storage
+      const { data, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .download(file.path);
+        
+      if (downloadError) throw downloadError;
+      
+      if (!data) throw new Error('File not found');
+      
+      // For password reset, admin can bypass the old password
+      // In a real system, you might require the old password or have a separate reset flow
+      
+      // Create file reader to get original file content
+      const fileReader = new FileReader();
+      const filePromise = new Promise<string>((resolve, reject) => {
+        fileReader.onload = () => resolve(fileReader.result as string);
+        fileReader.onerror = reject;
+        fileReader.readAsArrayBuffer(data);
+      });
+      
+      const fileArrayBuffer = await filePromise;
+      
+      // Create new file from old file
+      const originalFile = new File([fileArrayBuffer], file.name, {
+        type: file.type,
+        lastModified: file.metadata?.lastModified || Date.now(),
+      });
+      
+      // Encrypt with new password
+      const { encryptedFile, salt, verificationHash } = 
+        await encryptFileWithPassword(originalFile, newPassword);
+      
+      // Update file in storage
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .update(file.path, encryptedFile);
+        
+      if (uploadError) throw uploadError;
+      
+      // Update file record in database
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({
+          metadata: {
+            ...file.metadata,
+            salt,
+            verificationHash
+          }
+        })
+        .eq('id', fileId);
+        
+      if (updateError) throw updateError;
+      
+      // Refresh file list
+      fetchFiles();
+      
+      return true;
+    } catch (error) {
+      handleSupabaseError(error, 'Failed to reset password');
       return false;
     }
   };
@@ -365,5 +636,8 @@ export const useFiles = (parentId?: string | null) => {
     getFileMetadata,
     createFolder,
     refreshFiles: fetchFiles,
+    setFilePassword,
+    verifyFilePassword,
+    resetFilePassword
   };
 };
