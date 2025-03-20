@@ -30,7 +30,7 @@ export async function throttleRequest<T>(fn: () => Promise<T>): Promise<T> {
   }
   
   // Otherwise, queue the request
-  return new Promise((resolve, reject) => {
+  return new Promise<T>((resolve, reject) => {
     requestQueue.push(async () => {
       activeRequests++;
       try {
@@ -77,6 +77,7 @@ export async function withRetry<T>(
 /**
  * Combines throttling and retry logic
  * @param fn The function to execute with throttling and retry
+ * @returns Promise with the result of the function
  */
 export async function safeRequest<T>(fn: () => Promise<T>): Promise<T> {
   return throttleRequest(() => withRetry(fn));

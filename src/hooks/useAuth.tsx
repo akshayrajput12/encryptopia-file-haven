@@ -58,12 +58,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLastSessionUpdate(now);
     
     try {
-      await safeRequest(() => 
-        supabase
+      await safeRequest(async () => {
+        const { error } = await supabase
           .from('profiles')
           .update({ last_sign_in: new Date().toISOString() })
-          .eq('id', userId)
-      );
+          .eq('id', userId);
+          
+        if (error) throw error;
+        return { success: true };
+      });
     } catch (error) {
       console.error("Error updating last_sign_in:", error);
     }

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase, FileItem, handleSupabaseError, STORAGE_BUCKETS } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -46,6 +47,7 @@ export const useFiles = (parentId?: string | null) => {
         if (error) throw error;
         
         setFiles(data as FileItem[]);
+        return { success: true };
       });
     } catch (error) {
       handleSupabaseError(error, 'Failed to fetch files');
@@ -117,13 +119,16 @@ export const useFiles = (parentId?: string | null) => {
       const filePath = `${user.id}/${Date.now()}-${file.name}`;
       
       // Upload to storage using safeRequest for throttling and retry
-      const { error: uploadError } = await safeRequest(() => 
-        supabase.storage
+      const uploadResult = await safeRequest(async () => {
+        const { data, error } = await supabase.storage
           .from(STORAGE_BUCKETS.FILES)
-          .upload(filePath, fileToUpload)
-      );
-        
-      if (uploadError) throw uploadError;
+          .upload(filePath, fileToUpload);
+          
+        if (error) throw error;
+        return { data, error };
+      });
+      
+      if (uploadResult.error) throw uploadResult.error;
       
       // Create file record in database
       const newFile: Partial<FileItem> = {
@@ -144,21 +149,24 @@ export const useFiles = (parentId?: string | null) => {
         },
       };
       
-      const { data, error: dbError } = await safeRequest(() => 
-        supabase
+      const dbResult = await safeRequest(async () => {
+        const { data, error } = await supabase
           .from('files')
           .insert([newFile])
-          .select()
-      );
-        
-      if (dbError) throw dbError;
+          .select();
+          
+        if (error) throw error;
+        return { data, error };
+      });
+      
+      if (dbResult.error) throw dbResult.error;
       
       toast.success('File uploaded successfully');
       
       // Refresh file list
       fetchFiles();
       
-      return data?.[0] as FileItem;
+      return dbResult.data?.[0] as FileItem;
     } catch (error) {
       handleSupabaseError(error, 'Upload failed');
       return null;
