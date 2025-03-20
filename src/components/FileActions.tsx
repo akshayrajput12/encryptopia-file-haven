@@ -1,8 +1,7 @@
 
 import { useState } from "react";
 import { useFiles } from "@/hooks/useFiles";
-import { FileItem, supabase, STORAGE_BUCKETS, handleSupabaseError } from "@/lib/supabase";
-import { decryptFile } from "@/lib/encryption";
+import { FileItem } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -121,40 +120,10 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     // Check if file is password protected
     if (isPasswordProtected) {
       setEnterPasswordDialog(true);
-      return;
     }
-    
-    // For non-password protected files, we need to download and preview
-    const previewFile = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.storage
-          .from(STORAGE_BUCKETS.FILES)
-          .download(file.path);
-        
-        if (error) throw error;
-        if (!data) throw new Error('File not found');
-        
-        // If file is encrypted but not password protected
-        let fileBlob: Blob;
-        if (file.is_encrypted && file.encryption_key) {
-          fileBlob = await decryptFile(data, file.encryption_key);
-        } else {
-          fileBlob = data;
-        }
-        
-        setDecryptedFile(fileBlob);
-        setPreviewDialog(true);
-      } catch (error) {
-        handleSupabaseError(error, 'Failed to preview file');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    previewFile();
   };
 
+  // For folders, we only show info and delete
   if (isFolder) {
     return (
       <DropdownMenu>
