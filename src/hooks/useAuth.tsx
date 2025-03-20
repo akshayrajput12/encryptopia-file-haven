@@ -3,9 +3,11 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: any | null;
+  session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
@@ -17,45 +19,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check active session on component mount
+    // Set up auth state listener FIRST to prevent missing auth events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log("Auth state change:", event, currentSession?.user?.id);
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+        
+        if (event === 'SIGNED_IN') {
+          // Update user profile with last sign-in time
+          if (currentSession?.user) {
+            try {
+              await supabase
+                .from('profiles')
+                .update({ last_sign_in: new Date().toISOString() })
+                .eq('id', currentSession.user.id);
+              
+              navigate('/');
+            } catch (error) {
+              console.error("Error updating last_sign_in:", error);
+            }
+          }
+        }
+        
+        if (event === 'SIGNED_OUT') {
+          navigate('/');
+        }
+      }
+    );
+
+    // THEN check for existing session
     const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
         
-        setUser(session?.user || null);
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
         setLoading(false);
-
-        // Listen for auth state changes
-        const { data: { subscription } } = await supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            setUser(session?.user || null);
-            if (event === 'SIGNED_IN') {
-              // Update user profile with last sign-in time
-              if (session?.user) {
-                await supabase
-                  .from('profiles')
-                  .update({ last_sign_in: new Date().toISOString() })
-                  .eq('id', session.user.id);
-                
-                navigate('/');
-              }
-            }
-            
-            if (event === 'SIGNED_OUT') {
-              navigate('/auth');
-            }
-          }
-        );
-
-        return () => {
-          subscription.unsubscribe();
-        };
       } catch (error) {
         handleSupabaseError(error, 'Failed to check auth session');
         setLoading(false);
@@ -63,6 +70,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     checkSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const signIn = async (email: string, password: string) => {
@@ -73,7 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       
       toast.success('Signed in successfully');
-      navigate('/');
     } catch (error) {
       handleSupabaseError(error, 'Sign in failed');
     } finally {
@@ -141,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     user,
+    session,
     loading,
     signIn,
     signUp,

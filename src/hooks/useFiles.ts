@@ -183,6 +183,10 @@ export const useFiles = (parentId?: string | null) => {
       // Check if file is password protected
       if (file.metadata?.isPasswordProtected) {
         if (!password) {
+          // If no password provided, inform caller that password is needed
+          toast.info('This file is password protected', { 
+            description: 'Please enter the password to download this file.' 
+          });
           return { needsPassword: true, file };
         }
         
@@ -198,6 +202,7 @@ export const useFiles = (parentId?: string | null) => {
         );
         
         if (!success || !decryptedFile) {
+          toast.error('Incorrect password');
           return { success: false, message: 'Incorrect password' };
         }
         
