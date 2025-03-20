@@ -4,6 +4,7 @@ import { supabase, handleSupabaseError } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Session } from '@supabase/supabase-js';
+import { safeRequest } from '@/lib/requestUtils';
 
 interface AuthContextType {
   user: any | null;
@@ -19,12 +20,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Session timeout duration in milliseconds (30 minutes)
 const SESSION_TIMEOUT = 30 * 60 * 1000;
+// Debounce session updates to prevent rapid consecutive calls
+const SESSION_UPDATE_DEBOUNCE = 5000;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionTimer, setSessionTimer] = useState<number | null>(null);
+  const [lastSessionUpdate, setLastSessionUpdate] = useState<number>(0);
   const navigate = useNavigate();
 
   // Function to reset session timer
@@ -43,11 +47,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionTimer(newTimer);
   };
 
+  // Update profile with last sign-in time (debounced)
+  const updateLastSignIn = async (userId: string) => {
+    const now = Date.now();
+    // Only update if it's been at least SESSION_UPDATE_DEBOUNCE since the last update
+    if (now - lastSessionUpdate < SESSION_UPDATE_DEBOUNCE) {
+      return;
+    }
+    
+    setLastSessionUpdate(now);
+    
+    try {
+      await safeRequest(() => 
+        supabase
+          .from('profiles')
+          .update({ last_sign_in: new Date().toISOString() })
+          .eq('id', userId)
+      );
+    } catch (error) {
+      console.error("Error updating last_sign_in:", error);
+    }
+  };
+
   useEffect(() => {
+    let isMounted = true;
+    
     // Set up auth state listener FIRST to prevent missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log("Auth state change:", event, currentSession?.user?.id);
+        
+        if (!isMounted) return;
+        
         setSession(currentSession);
         setUser(currentSession?.user || null);
         
@@ -57,16 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Update user profile with last sign-in time
           if (currentSession?.user) {
-            try {
-              await supabase
-                .from('profiles')
-                .update({ last_sign_in: new Date().toISOString() })
-                .eq('id', currentSession.user.id);
-              
-              navigate('/');
-            } catch (error) {
-              console.error("Error updating last_sign_in:", error);
-            }
+            updateLastSignIn(currentSession.user.id);
+            navigate('/');
           }
         }
         
@@ -84,22 +107,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // THEN check for existing session
     const checkSession = async () => {
       try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error } = await safeRequest(() => 
+          supabase.auth.getSession()
+        );
         
         if (error) throw error;
         
-        setSession(currentSession);
-        setUser(currentSession?.user || null);
-        
-        // If user is signed in, reset the session timer
-        if (currentSession?.user) {
-          resetSessionTimer();
+        if (isMounted) {
+          setSession(currentSession);
+          setUser(currentSession?.user || null);
+          
+          // If user is signed in, reset the session timer
+          if (currentSession?.user) {
+            resetSessionTimer();
+          }
+          
+          setLoading(false);
         }
-        
-        setLoading(false);
       } catch (error) {
         handleSupabaseError(error, 'Failed to check auth session');
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -119,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
       
       // Clean up activity listeners
@@ -133,10 +163,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [navigate, sessionTimer, user]);
 
+  // Authentication functions
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await safeRequest(() => 
+        supabase.auth.signInWithPassword({ email, password })
+      );
       
       if (error) throw error;
       
@@ -151,15 +184,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
+      const { error } = await safeRequest(() => 
+        supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
           },
-        },
-      });
+        })
+      );
       
       if (error) throw error;
       
@@ -174,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signOut();
+      const { error } = await safeRequest(() => supabase.auth.signOut());
       
       if (error) throw error;
       
@@ -195,12 +230,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sendMagicLink = async (email: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: window.location.origin,
-        },
-      });
+      const { error } = await safeRequest(() => 
+        supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        })
+      );
       
       if (error) throw error;
       

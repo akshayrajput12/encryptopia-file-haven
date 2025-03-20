@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase, FileItem, handleSupabaseError, STORAGE_BUCKETS } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -11,6 +10,7 @@ import {
 } from '@/lib/encryption';
 import { validateFileContent } from '@/lib/security';
 import { useAuth } from './useAuth';
+import { safeRequest } from '@/lib/requestUtils';
 
 export const useFiles = (parentId?: string | null) => {
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -18,32 +18,35 @@ export const useFiles = (parentId?: string | null) => {
   const [uploading, setUploading] = useState(false);
   const { user } = useAuth();
 
-  // Fetch files
+  // Fetch files with improved error handling and request throttling
   const fetchFiles = async () => {
     try {
       setLoading(true);
       
       if (!user) return;
       
-      let query = supabase
-        .from('files')
-        .select('*')
-        .eq('owner_id', user.id)
-        .order('created_at', { ascending: false });
+      // Using our safeRequest utility for throttling and retry
+      await safeRequest(async () => {
+        let query = supabase
+          .from('files')
+          .select('*')
+          .eq('owner_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        // If parentId is provided, filter by parent
+        if (parentId) {
+          query = query.eq('parent_id', parentId);
+        } else {
+          // Root level files have null parent_id
+          query = query.is('parent_id', null);
+        }
         
-      // If parentId is provided, filter by parent
-      if (parentId) {
-        query = query.eq('parent_id', parentId);
-      } else {
-        // Root level files have null parent_id
-        query = query.is('parent_id', null);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      setFiles(data as FileItem[]);
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        setFiles(data as FileItem[]);
+      });
     } catch (error) {
       handleSupabaseError(error, 'Failed to fetch files');
     } finally {
@@ -51,14 +54,26 @@ export const useFiles = (parentId?: string | null) => {
     }
   };
 
-  // Initial fetch
+  // Initial fetch with debounce
   useEffect(() => {
+    let isMounted = true;
+    
     if (user) {
-      fetchFiles();
+      // Add a small delay to prevent rapid consecutive requests
+      const timer = setTimeout(() => {
+        if (isMounted) {
+          fetchFiles();
+        }
+      }, 300);
+      
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
     }
   }, [user, parentId]);
 
-  // Upload file
+  // Upload file with improved error handling
   const uploadFile = async (file: File, encrypt: boolean = false, password?: string, parentId?: string) => {
     try {
       if (!user) throw new Error('Not authenticated');
@@ -101,10 +116,12 @@ export const useFiles = (parentId?: string | null) => {
       // Generate a unique file path
       const filePath = `${user.id}/${Date.now()}-${file.name}`;
       
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from(STORAGE_BUCKETS.FILES)
-        .upload(filePath, fileToUpload);
+      // Upload to storage using safeRequest for throttling and retry
+      const { error: uploadError } = await safeRequest(() => 
+        supabase.storage
+          .from(STORAGE_BUCKETS.FILES)
+          .upload(filePath, fileToUpload)
+      );
         
       if (uploadError) throw uploadError;
       
@@ -127,10 +144,12 @@ export const useFiles = (parentId?: string | null) => {
         },
       };
       
-      const { data, error: dbError } = await supabase
-        .from('files')
-        .insert([newFile])
-        .select();
+      const { data, error: dbError } = await safeRequest(() => 
+        supabase
+          .from('files')
+          .insert([newFile])
+          .select()
+      );
         
       if (dbError) throw dbError;
       
@@ -148,19 +167,22 @@ export const useFiles = (parentId?: string | null) => {
     }
   };
 
-  // Download file
+  // Download file with improved error handling
   const downloadFile = async (fileId: string, password?: string) => {
     try {
       if (!user) throw new Error('Not authenticated');
       
-      // Get file details
-      const { data: fileData, error: fileError } = await supabase
-        .from('files')
-        .select('*')
-        .eq('id', fileId)
-        .single();
-        
-      if (fileError) throw fileError;
+      // Get file details with safe request
+      const fileData = await safeRequest(async () => {
+        const { data, error } = await supabase
+          .from('files')
+          .select('*')
+          .eq('id', fileId)
+          .single();
+          
+        if (error) throw error;
+        return data;
+      });
       
       const file = fileData as FileItem;
       
@@ -169,14 +191,17 @@ export const useFiles = (parentId?: string | null) => {
         throw new Error('You do not have permission to download this file');
       }
       
-      // Download from storage
-      const { data, error: downloadError } = await supabase.storage
-        .from(STORAGE_BUCKETS.FILES)
-        .download(file.path);
+      // Download from storage with safe request
+      const fileBlob = await safeRequest(async () => {
+        const { data, error } = await supabase.storage
+          .from(STORAGE_BUCKETS.FILES)
+          .download(file.path);
+          
+        if (error) throw error;
+        if (!data) throw new Error('File not found');
         
-      if (downloadError) throw downloadError;
-      
-      if (!data) throw new Error('File not found');
+        return data;
+      });
       
       let fileToDownload: Blob;
       
@@ -195,7 +220,7 @@ export const useFiles = (parentId?: string | null) => {
         const verificationHash = file.metadata.verificationHash;
         
         const { success, decryptedFile } = await decryptFileWithPassword(
-          data, 
+          fileBlob, 
           password, 
           salt, 
           verificationHash
@@ -210,10 +235,10 @@ export const useFiles = (parentId?: string | null) => {
       }
       // Regular decryption if encrypted but not password protected
       else if (file.is_encrypted && file.encryption_key) {
-        fileToDownload = await decryptFile(data, file.encryption_key);
+        fileToDownload = await decryptFile(fileBlob, file.encryption_key);
       } else {
         // Not encrypted
-        fileToDownload = data;
+        fileToDownload = fileBlob;
       }
       
       // Create download link
