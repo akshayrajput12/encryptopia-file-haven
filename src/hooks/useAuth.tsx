@@ -1,5 +1,5 @@
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { supabase, handleSupabaseError } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [sessionTimer, setSessionTimer] = useState<number | null>(null);
   const [lastSessionUpdate, setLastSessionUpdate] = useState<number>(0);
+  const authCheckCompleted = useRef(false);
   const navigate = useNavigate();
 
   // Function to reset session timer
@@ -73,14 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (authCheckCompleted.current) return;
+    
     let isMounted = true;
+    console.log("Setting up auth state listeners...");
     
     // Set up auth state listener FIRST to prevent missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log("Auth state change:", event, currentSession?.user?.id);
-        
         if (!isMounted) return;
+        
+        console.log("Auth state change:", event, currentSession?.user?.id);
         
         setSession(currentSession);
         setUser(currentSession?.user || null);
@@ -126,11 +130,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           
           setLoading(false);
+          authCheckCompleted.current = true;
         }
       } catch (error) {
         handleSupabaseError(error, 'Failed to check auth session');
         if (isMounted) {
           setLoading(false);
+          authCheckCompleted.current = true;
         }
       }
     };
