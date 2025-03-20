@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -18,7 +17,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     storageKey: 'secure-files-storage-key',
-    localStorage: window.localStorage,
+    storage: window.localStorage,
     detectSessionInUrl: true,
     flowType: 'pkce',
     sessionTimeout: 1800, // 30 minutes in seconds

@@ -1,6 +1,8 @@
+
 import { useState } from "react";
 import { useFiles } from "@/hooks/useFiles";
-import { FileItem } from "@/lib/supabase";
+import { FileItem, supabase, STORAGE_BUCKETS, handleSupabaseError } from "@/lib/supabase";
+import { decryptFile } from "@/lib/encryption";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
