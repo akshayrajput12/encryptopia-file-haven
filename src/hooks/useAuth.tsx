@@ -17,11 +17,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Session timeout duration in milliseconds (30 minutes)
+const SESSION_TIMEOUT = 30 * 60 * 1000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionTimer, setSessionTimer] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  // Function to reset session timer
+  const resetSessionTimer = () => {
+    // Clear any existing timer
+    if (sessionTimer) {
+      window.clearTimeout(sessionTimer);
+    }
+    
+    // Set new timer for 30 minutes
+    const newTimer = window.setTimeout(async () => {
+      toast.info("Your session has expired. Please sign in again.");
+      await signOut();
+    }, SESSION_TIMEOUT);
+    
+    setSessionTimer(newTimer);
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST to prevent missing auth events
@@ -32,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentSession?.user || null);
         
         if (event === 'SIGNED_IN') {
+          // Reset session timer on sign in
+          resetSessionTimer();
+          
           // Update user profile with last sign-in time
           if (currentSession?.user) {
             try {
@@ -48,6 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (event === 'SIGNED_OUT') {
+          // Clear session timer on sign out
+          if (sessionTimer) {
+            window.clearTimeout(sessionTimer);
+            setSessionTimer(null);
+          }
           navigate('/');
         }
       }
@@ -62,6 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setSession(currentSession);
         setUser(currentSession?.user || null);
+        
+        // If user is signed in, reset the session timer
+        if (currentSession?.user) {
+          resetSessionTimer();
+        }
+        
         setLoading(false);
       } catch (error) {
         handleSupabaseError(error, 'Failed to check auth session');
@@ -71,10 +105,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     checkSession();
 
+    // Set up activity listeners to reset the timer on user activity
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+    
+    const handleUserActivity = () => {
+      if (user) {
+        resetSessionTimer();
+      }
+    };
+    
+    activityEvents.forEach(eventType => {
+      window.addEventListener(eventType, handleUserActivity);
+    });
+
     return () => {
       subscription.unsubscribe();
+      
+      // Clean up activity listeners
+      activityEvents.forEach(eventType => {
+        window.removeEventListener(eventType, handleUserActivity);
+      });
+      
+      // Clear any existing timer
+      if (sessionTimer) {
+        window.clearTimeout(sessionTimer);
+      }
     };
-  }, [navigate]);
+  }, [navigate, sessionTimer, user]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -120,6 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       
       if (error) throw error;
+      
+      // Clear session timer
+      if (sessionTimer) {
+        window.clearTimeout(sessionTimer);
+        setSessionTimer(null);
+      }
       
       toast.success('Signed out successfully');
     } catch (error) {

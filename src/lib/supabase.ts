@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -11,7 +12,7 @@ export const STORAGE_BUCKETS = {
   AVATARS: 'avatars',
 };
 
-// Create a Supabase client with 30-minute session timeout
+// Create a Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -20,7 +21,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: window.localStorage,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    sessionTimeout: 1800, // 30 minutes in seconds
   }
 });
 
