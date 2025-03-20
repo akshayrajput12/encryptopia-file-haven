@@ -148,8 +148,14 @@ export const useFiles = (parentId?: string | null) => {
     }
   };
 
-  // Download file
-  const downloadFile = async (fileId: string, password?: string) => {
+  // Preview file (new function to handle both password-protected and regular files)
+  const previewFile = async (fileId: string, password?: string): Promise<{ 
+    success: boolean; 
+    needsPassword?: boolean; 
+    file?: FileItem;
+    decryptedFile?: Blob;
+    message?: string;
+  }> => {
     try {
       if (!user) throw new Error('Not authenticated');
       
@@ -166,7 +172,7 @@ export const useFiles = (parentId?: string | null) => {
       
       // Check access permissions
       if (file.owner_id !== user.id && !file.is_shared) {
-        throw new Error('You do not have permission to download this file');
+        throw new Error('You do not have permission to preview this file');
       }
       
       // Download from storage
@@ -178,12 +184,10 @@ export const useFiles = (parentId?: string | null) => {
       
       if (!data) throw new Error('File not found');
       
-      let fileToDownload: Blob;
-      
       // Check if file is password protected
       if (file.metadata?.isPasswordProtected) {
         if (!password) {
-          return { needsPassword: true, file };
+          return { success: false, needsPassword: true, file };
         }
         
         // Decrypt with password
@@ -201,21 +205,40 @@ export const useFiles = (parentId?: string | null) => {
           return { success: false, message: 'Incorrect password' };
         }
         
-        fileToDownload = decryptedFile;
+        return { success: true, decryptedFile, file };
       }
       // Regular decryption if encrypted but not password protected
       else if (file.is_encrypted && file.encryption_key) {
-        fileToDownload = await decryptFile(data, file.encryption_key);
+        const decryptedFile = await decryptFile(data, file.encryption_key);
+        return { success: true, decryptedFile, file };
       } else {
         // Not encrypted
-        fileToDownload = data;
+        return { success: true, decryptedFile: data, file };
+      }
+    } catch (error) {
+      handleSupabaseError(error, 'Preview failed');
+      return { success: false, message: 'Preview failed' };
+    }
+  };
+
+  // Download file
+  const downloadFile = async (fileId: string, password?: string) => {
+    try {
+      const previewResult = await previewFile(fileId, password);
+      
+      if (!previewResult.success) {
+        return previewResult;
+      }
+      
+      if (!previewResult.decryptedFile) {
+        throw new Error('Failed to prepare file for download');
       }
       
       // Create download link
-      const url = URL.createObjectURL(fileToDownload);
+      const url = URL.createObjectURL(previewResult.decryptedFile);
       const a = document.createElement('a');
       a.href = url;
-      a.download = file.name;
+      a.download = previewResult.file?.name || 'download';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -230,50 +253,7 @@ export const useFiles = (parentId?: string | null) => {
 
   // Verify file password and get decrypted file
   const verifyFilePassword = async (fileId: string, password: string) => {
-    try {
-      if (!user) throw new Error('Not authenticated');
-      
-      // Get file details
-      const { data: fileData, error: fileError } = await supabase
-        .from('files')
-        .select('*')
-        .eq('id', fileId)
-        .single();
-        
-      if (fileError) throw fileError;
-      
-      const file = fileData as FileItem;
-      
-      // Download from storage
-      const { data, error: downloadError } = await supabase.storage
-        .from(STORAGE_BUCKETS.FILES)
-        .download(file.path);
-        
-      if (downloadError) throw downloadError;
-      
-      if (!data) throw new Error('File not found');
-      
-      // Check if file is password protected
-      if (!file.metadata?.isPasswordProtected) {
-        throw new Error('File is not password protected');
-      }
-      
-      // Verify and decrypt with password
-      const salt = file.metadata.salt;
-      const verificationHash = file.metadata.verificationHash;
-      
-      const result = await decryptFileWithPassword(
-        data, 
-        password, 
-        salt, 
-        verificationHash
-      );
-      
-      return result;
-    } catch (error) {
-      handleSupabaseError(error, 'Password verification failed');
-      return { success: false };
-    }
+    return previewFile(fileId, password);
   };
 
   // Set password for a file
@@ -640,6 +620,7 @@ export const useFiles = (parentId?: string | null) => {
     refreshFiles: fetchFiles,
     setFilePassword,
     verifyFilePassword,
-    resetFilePassword
+    resetFilePassword,
+    previewFile // Add the new previewFile function to the returned object
   };
 };

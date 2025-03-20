@@ -246,6 +246,7 @@ export function PasswordProtection({ file, isOpen, onClose, onSuccess, mode }: P
                           type={showPassword ? "text" : "password"} 
                           className="pr-10"
                           placeholder="Enter file password"
+                          autoFocus
                         />
                         <Button
                           type="button"
@@ -303,6 +304,35 @@ export function PasswordProtectedViewer({ file, decryptedFile }: { file: FileIte
   const isAudio = file.type.startsWith('audio/');
   const isText = file.type.startsWith('text/') || file.type === 'application/json';
 
+  // Function to handle text file previews
+  const renderTextPreview = async () => {
+    try {
+      const text = await decryptedFile.text();
+      return (
+        <pre className="bg-muted p-4 rounded overflow-auto max-h-[500px]">
+          <code>{text}</code>
+        </pre>
+      );
+    } catch (error) {
+      console.error("Failed to read text file:", error);
+      return <p className="text-center">Error displaying text content</p>;
+    }
+  };
+
+  const [textContent, setTextContent] = useState<React.ReactNode>(
+    <div className="flex justify-center items-center h-[200px]">
+      <span className="animate-spin h-6 w-6 border-2 border-current border-t-transparent rounded-full mr-2"></span>
+      Loading text content...
+    </div>
+  );
+
+  // Load text content if needed
+  React.useEffect(() => {
+    if (isText) {
+      renderTextPreview().then(setTextContent);
+    }
+  }, [isText, decryptedFile]);
+
   return (
     <div className={`bg-background border rounded-lg overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       <div className="flex items-center justify-between p-2 border-b bg-muted/30">
@@ -341,11 +371,7 @@ export function PasswordProtectedViewer({ file, decryptedFile }: { file: FileIte
             className="w-full" 
           />
         )}
-        {isText && (
-          <pre className="bg-muted p-4 rounded overflow-auto">
-            <code>{URL.createObjectURL(decryptedFile)}</code>
-          </pre>
-        )}
+        {isText && textContent}
         {!isImage && !isPdf && !isVideo && !isAudio && !isText && (
           <div className="text-center p-4">
             <p>Preview not available for this file type.</p>

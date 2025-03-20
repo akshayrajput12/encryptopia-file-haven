@@ -47,7 +47,7 @@ interface FileActionsProps {
 }
 
 export function FileActions({ file, isCompact = false }: FileActionsProps) {
-  const { downloadFile, deleteFile, shareFile, getFileMetadata } = useFiles();
+  const { downloadFile, deleteFile, shareFile, getFileMetadata, previewFile } = useFiles();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
   const [metadataDialog, setMetadataDialog] = useState(false);
@@ -60,6 +60,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
   const [loading, setLoading] = useState(false);
   const [decryptedFile, setDecryptedFile] = useState<Blob | null>(null);
   const [previewDialog, setPreviewDialog] = useState(false);
+  const [passwordForAction, setPasswordForAction] = useState<"preview" | "download" | null>(null);
 
   const isFolder = file.type === "folder";
   const isPasswordProtected = file.metadata?.isPasswordProtected === true;
@@ -69,11 +70,19 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     
     // Check if file is password protected
     if (isPasswordProtected) {
+      setPasswordForAction("download");
       setEnterPasswordDialog(true);
       return;
     }
     
-    await downloadFile(file.id);
+    setLoading(true);
+    const result = await downloadFile(file.id);
+    setLoading(false);
+    
+    if (!result.success && result.needsPassword) {
+      setPasswordForAction("download");
+      setEnterPasswordDialog(true);
+    }
   };
 
   const handleDelete = async () => {
@@ -109,17 +118,47 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     }
   };
 
-  const handlePasswordSuccess = (decrypted: Blob) => {
+  const handlePasswordSuccess = async (decrypted: Blob) => {
     setDecryptedFile(decrypted);
-    setPreviewDialog(true);
+    
+    if (passwordForAction === "download") {
+      // Create download link
+      const url = URL.createObjectURL(decrypted);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setEnterPasswordDialog(false);
+    } else {
+      // For preview
+      setPreviewDialog(true);
+    }
+    
+    setPasswordForAction(null);
   };
 
-  const handlePreview = (e: React.MouseEvent) => {
+  const handlePreview = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    setLoading(true);
     
-    // Check if file is password protected
-    if (isPasswordProtected) {
-      setEnterPasswordDialog(true);
+    try {
+      // Use the new previewFile function from useFiles hook
+      const result = await previewFile(file.id);
+      
+      if (result.success && result.decryptedFile) {
+        setDecryptedFile(result.decryptedFile);
+        setPreviewDialog(true);
+      } else if (result.needsPassword) {
+        setPasswordForAction("preview");
+        setEnterPasswordDialog(true);
+      }
+    } catch (error) {
+      console.error("Preview error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -445,7 +484,10 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
       <PasswordProtection 
         file={file}
         isOpen={enterPasswordDialog}
-        onClose={() => setEnterPasswordDialog(false)}
+        onClose={() => {
+          setEnterPasswordDialog(false);
+          setPasswordForAction(null);
+        }}
         onSuccess={handlePasswordSuccess}
         mode="enter"
       />
