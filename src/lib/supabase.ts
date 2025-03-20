@@ -3,8 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
 // Environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Check for required configuration
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables. Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
+  // We'll provide fallback values from the integration file if available
+}
+
+// Use integration values as fallback if environment variables are not set
+const finalSupabaseUrl = supabaseUrl || "https://pqiclidmixcogskvhxnz.supabase.co";
+const finalSupabaseAnonKey = supabaseAnonKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxaWNsaWRtaXhjb2dza3ZoeG56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIzNjg0OTUsImV4cCI6MjA1Nzk0NDQ5NX0.0m2SZxv_mp4bHDcWjLL9KczPC0gkp78Rm1ISjPe3ygs";
 
 // Storage bucket names
 export const STORAGE_BUCKETS = {
@@ -13,7 +23,7 @@ export const STORAGE_BUCKETS = {
 };
 
 // Create a Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
