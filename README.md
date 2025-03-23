@@ -1,69 +1,100 @@
-# Welcome to your Lovable project
+# SecureFiles
 
-## Project info
+A modern, secure file management system with end-to-end encryption, built with React and Supabase.
 
-**URL**: https://lovable.dev/projects/76887bf8-fdaf-4919-bb79-8e8b07e516b0
+## Features
 
-## How can I edit this code?
+### Security
+- End-to-end encryption for file storage
+- Password protection for sensitive files
+- Client-side encryption/decryption
+- Secure file sharing with granular permissions
+- Malware and threat detection
 
-There are several ways of editing your application.
+### User Interface
+- Modern, responsive design
+- Dark/Light theme support
+- Intuitive file organization
+- Drag-and-drop file upload
+- File preview capabilities
 
-**Use Lovable**
+### Authentication
+- Email/Password authentication
+- Magic link login support
+- Two-factor authentication ready
+- Session management
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/76887bf8-fdaf-4919-bb79-8e8b07e516b0) and start prompting.
+### File Management
+- Folder creation and navigation
+- File metadata viewing
+- Advanced search capabilities
+- File sharing with permission levels
+- File type restrictions
 
-Changes made via Lovable will be committed automatically to this repo.
+## Tech Stack
 
-**Use your preferred IDE**
+- **Frontend**: React, TypeScript, Vite
+- **Styling**: Tailwind CSS
+- **Backend**: Supabase
+- **Authentication**: Supabase Auth
+- **Storage**: Supabase Storage
+- **State Management**: React Hooks
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Getting Started
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Prerequisites
 
-Follow these steps:
+- Node.js (v14 or higher)
+- npm or yarn
+- Supabase account
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Installation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env` file with your Supabase credentials
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Project Structure
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+src/
+  ├── components/     # UI components
+  ├── hooks/          # Custom React hooks
+  ├── lib/            # Utility functions
+  ├── pages/          # Page components
+  └── integrations/   # External service integrations
 ```
 
-**Edit a file directly in GitHub**
+## Security Features
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- AES-GCM encryption with 256-bit keys
+- Client-side encryption for end-to-end privacy
+- Password-derived key option using PBKDF2
+- Role-based access control
+- Input sanitization and validation
+- Protection against XSS and CSRF attacks
 
-**Use GitHub Codespaces**
+## Development
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Commands
 
-## What technologies are used for this project?
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
 
-This project is built with .
+### Code Style
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- TypeScript for type safety
+- ESLint for code linting
+- Prettier for code formatting
 
-## How can I deploy this project?
+## License
 
-Simply open [Lovable](https://lovable.dev/projects/76887bf8-fdaf-4919-bb79-8e8b07e516b0) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+MIT
