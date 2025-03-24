@@ -68,7 +68,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // Check if file is password protected
+    
     if (isPasswordProtected) {
       setPasswordForAction("download");
       setEnterPasswordDialog(true);
@@ -162,7 +162,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     }
   };
 
-  // For folders, we only show info and delete
+  
   if (isFolder) {
     return (
       <DropdownMenu>
@@ -233,7 +233,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
             Details
           </DropdownMenuItem>
           
-          {/* Password protection menu items */}
+         
           <DropdownMenuSeparator />
           
           {isPasswordProtected ? (
