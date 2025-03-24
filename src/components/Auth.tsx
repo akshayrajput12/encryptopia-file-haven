@@ -18,7 +18,7 @@ export function Auth() {
   const [showAuth, setShowAuth] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Focus password field when tab changes to signin
+ 
   useEffect(() => {
     if (activeTab === "signin" && showAuth) {
       setTimeout(() => {
