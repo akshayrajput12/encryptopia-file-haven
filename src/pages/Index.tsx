@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 const Index = () => {
   const { user, loading } = useAuth();
 
-  // Loading state
+  
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -20,11 +20,11 @@ const Index = () => {
     );
   }
 
-  // If the user is not authenticated, show the landing page with auth
+  
   if (!user) {
     return (
       <div className="flex flex-col min-h-screen bg-background">
-        {/* Hero Section */}
+        
         <div className="container py-12 px-4 md:px-6 flex-1 flex flex-col">
           <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col">
             <div className="text-center mb-8">
