@@ -1,4 +1,4 @@
-# SecureFiles
+ # SecureFiles
 
 A modern, secure file management system with end-to-end encryption, built with React and Supabase.
 
