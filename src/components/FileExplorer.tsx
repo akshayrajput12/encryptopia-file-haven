@@ -77,7 +77,7 @@ export function FileExplorer() {
   const navigateToFolder = (folderId: string, folderName: string) => {
     setCurrentFolder(folderId);
     
-    // Update breadcrumb history
+    
     setFolderHistory((prev) => [
       ...prev,
       { id: folderId, name: folderName },
