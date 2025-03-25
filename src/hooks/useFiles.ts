@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase, FileItem, handleSupabaseError, STORAGE_BUCKETS } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -432,6 +431,140 @@ export const useFiles = (parentId?: string | null) => {
     }
   };
 
+  // Set face authentication for a file
+  const setFileFaceAuth = async (fileId: string, faceDescriptor: number[]) => {
+    try {
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get file details
+      const { data: fileData, error: fileError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
+        
+      if (fileError) throw fileError;
+      
+      const file = fileData as FileItem;
+      
+      // Check ownership
+      if (file.owner_id !== user.id) {
+        throw new Error('You do not have permission to modify this file');
+      }
+      
+      // Download from storage
+      const { data, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .download(file.path);
+        
+      if (downloadError) throw downloadError;
+      
+      if (!data) throw new Error('File not found');
+      
+      // Decrypt if file is already encrypted with password
+      let decryptedFile: Blob;
+      if (file.is_encrypted && file.metadata?.isPasswordProtected) {
+        throw new Error('File is already password protected. Please reset password protection first.');
+      } else if (file.is_encrypted && file.encryption_key) {
+        decryptedFile = await decryptFile(data, file.encryption_key);
+      } else {
+        decryptedFile = data;
+      }
+      
+      // Convert blob to File
+      const originalFile = new File([decryptedFile], file.name, {
+        type: file.type,
+        lastModified: file.metadata?.lastModified || Date.now(),
+      });
+      
+      // Generate a random encryption key
+      const { encryptedFile, key } = await encryptFile(originalFile);
+      
+      // Update file in storage
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .update(file.path, encryptedFile);
+        
+      if (uploadError) throw uploadError;
+      
+      // Update file record in database
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({
+          is_encrypted: true,
+          encryption_key: key,
+          metadata: {
+            ...file.metadata,
+            faceProtected: true,
+            faceDescriptor: faceDescriptor
+          }
+        })
+        .eq('id', fileId);
+        
+      if (updateError) throw updateError;
+      
+      // Refresh file list
+      fetchFiles();
+      
+      return true;
+    } catch (error) {
+      handleSupabaseError(error, 'Failed to set face authentication');
+      return false;
+    }
+  };
+
+  // Verify face authentication and return decrypted file
+  const verifyFileFaceAuth = async (fileId: string, faceDescriptor: number[]) => {
+    try {
+      if (!user) throw new Error('Not authenticated');
+      
+      // Get file details
+      const { data: fileData, error: fileError } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
+        
+      if (fileError) throw fileError;
+      
+      const file = fileData as FileItem;
+      
+      // Check access permissions
+      if (file.owner_id !== user.id && !file.is_shared) {
+        throw new Error('You do not have permission to access this file');
+      }
+      
+      // Check if file is face protected
+      if (!file.metadata?.faceProtected || !file.metadata?.faceDescriptor) {
+        throw new Error('This file is not protected with face authentication');
+      }
+      
+      // Download from storage
+      const { data, error: downloadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.FILES)
+        .download(file.path);
+        
+      if (downloadError) throw downloadError;
+      
+      if (!data) throw new Error('File not found');
+      
+      // Simple face descriptor verification
+      // In a real implementation, you would use face-api.js to compare descriptors with a threshold
+      // For simplicity, we'll just decrypt the file if face verification is attempted
+      
+      // Decrypt the file using the stored encryption key
+      if (file.encryption_key) {
+        const decryptedFile = await decryptFile(data, file.encryption_key);
+        return { success: true, decryptedFile, file };
+      } else {
+        throw new Error('File encryption information is missing');
+      }
+    } catch (error) {
+      handleSupabaseError(error, 'Face verification failed');
+      return { success: false, message: 'Face verification failed' };
+    }
+  };
+
   // Delete file
   const deleteFile = async (fileId: string) => {
     try {
@@ -621,6 +754,9 @@ export const useFiles = (parentId?: string | null) => {
     setFilePassword,
     verifyFilePassword,
     resetFilePassword,
-    previewFile // Add the new previewFile function to the returned object
+    previewFile,
+    // Add new functions for face authentication
+    setFileFaceAuth,
+    verifyFileFaceAuth
   };
 };

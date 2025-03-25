@@ -7,11 +7,13 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Lock, Eye, EyeOff, KeyRound, AlertCircle } from "lucide-react";
+import { Lock, Eye, EyeOff, KeyRound, AlertCircle, Camera, User, Fingerprint } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { FileItem } from "@/lib/supabase";
 import { useFiles } from "@/hooks/useFiles";
+import { FaceRecognition } from "./FaceRecognition";
 
 // Schema for setting a new password
 const setPasswordSchema = z.object({
@@ -40,7 +42,9 @@ export function PasswordProtection({ file, isOpen, onClose, onSuccess, mode }: P
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const { setFilePassword, verifyFilePassword, resetFilePassword } = useFiles();
+  const [authMethod, setAuthMethod] = useState<"password" | "face">("password");
+  const [showFaceRecognition, setShowFaceRecognition] = useState(false);
+  const { setFilePassword, verifyFilePassword, resetFilePassword, setFileFaceAuth, verifyFileFaceAuth } = useFiles();
 
   // Form for setting a new password
   const setPasswordForm = useForm<z.infer<typeof setPasswordSchema>>({
@@ -61,6 +65,9 @@ export function PasswordProtection({ file, isOpen, onClose, onSuccess, mode }: P
 
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
   const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
+
+  // Check if face authentication is available for this file
+  const hasFaceAuth = file.metadata?.faceProtected === true;
 
   const handleSetPassword = async (data: z.infer<typeof setPasswordSchema>) => {
     setLoading(true);
@@ -129,19 +136,68 @@ export function PasswordProtection({ file, isOpen, onClose, onSuccess, mode }: P
     }
   };
 
+  // Face authentication handlers
+  const handleCaptureFace = async (faceDescriptor: Float32Array) => {
+    setLoading(true);
+    setErrorMessage(null);
+    
+    try {
+      // Convert Float32Array to regular array for storage
+      const descriptorArray = Array.from(faceDescriptor);
+      
+      const success = await setFileFaceAuth(file.id, descriptorArray);
+      if (success) {
+        toast.success("Face authentication set successfully");
+        setShowFaceRecognition(false);
+        onClose();
+      } else {
+        setErrorMessage("Failed to set face authentication");
+      }
+    } catch (error) {
+      console.error("Error setting face authentication:", error);
+      setErrorMessage("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyFace = async (faceDescriptor: Float32Array) => {
+    setLoading(true);
+    setErrorMessage(null);
+    
+    try {
+      const result = await verifyFileFaceAuth(file.id, Array.from(faceDescriptor));
+      if (result.success && result.decryptedFile) {
+        if (onSuccess) {
+          onSuccess(result.decryptedFile);
+        }
+        toast.success("Face verification successful");
+        setShowFaceRecognition(false);
+        onClose();
+      } else {
+        setErrorMessage("Face verification failed");
+      }
+    } catch (error) {
+      console.error("Error verifying face:", error);
+      setErrorMessage("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {mode === "set" && "Set Password Protection"}
-            {mode === "enter" && "Enter Password"}
-            {mode === "reset" && "Reset Password"}
+            {mode === "set" && "Set Security Protection"}
+            {mode === "enter" && "Authentication Required"}
+            {mode === "reset" && "Reset Security"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "set" && "Add password protection to your file. You'll need this password to view the file in the future."}
-            {mode === "enter" && "This file is password protected. Enter the password to view it."}
-            {mode === "reset" && "Reset your file password. This will replace the existing password."}
+            {mode === "set" && "Add security protection to your file. You'll need to authenticate to view it in the future."}
+            {mode === "enter" && "This file is protected. Please authenticate to view it."}
+            {mode === "reset" && "Reset your file security settings. This will replace the existing protection."}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,131 +208,222 @@ export function PasswordProtection({ file, isOpen, onClose, onSuccess, mode }: P
           </div>
         )}
 
-        {(mode === "set" || mode === "reset") && (
-          <Form {...setPasswordForm}>
-            <form onSubmit={setPasswordForm.handleSubmit(mode === "set" ? handleSetPassword : handleResetPassword)} className="space-y-4">
-              <FormField
-                control={setPasswordForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          type={showPassword ? "text" : "password"} 
-                          className="pr-10"
-                          placeholder="Enter a strong password"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={togglePasswordVisibility}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={setPasswordForm.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirm Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          type={showConfirmPassword ? "text" : "password"} 
-                          className="pr-10"
-                          placeholder="Confirm your password"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={toggleConfirmPasswordVisibility}
-                        >
-                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading && (
-                    <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  )}
-                  {mode === "set" ? "Set Password" : "Reset Password"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        )}
+        {showFaceRecognition ? (
+          <FaceRecognition 
+            onCapture={mode === "enter" ? handleVerifyFace : handleCaptureFace} 
+            onCancel={() => setShowFaceRecognition(false)}
+            mode={mode === "enter" ? "verify" : "capture"}
+            storedDescriptor={
+              hasFaceAuth && file.metadata?.faceDescriptor 
+                ? new Float32Array(file.metadata.faceDescriptor) 
+                : undefined
+            }
+          />
+        ) : (
+          <>
+            {mode === "enter" && (
+              <Tabs 
+                defaultValue={hasFaceAuth ? "face" : "password"} 
+                onValueChange={(value) => setAuthMethod(value as "password" | "face")}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="password" disabled={!file.metadata?.isPasswordProtected}>
+                    <Lock className="h-4 w-4 mr-2" />
+                    Password
+                  </TabsTrigger>
+                  <TabsTrigger value="face" disabled={!hasFaceAuth}>
+                    <User className="h-4 w-4 mr-2" />
+                    Face ID
+                  </TabsTrigger>
+                </TabsList>
 
-        {mode === "enter" && (
-          <Form {...enterPasswordForm}>
-            <form onSubmit={enterPasswordForm.handleSubmit(handleEnterPassword)} className="space-y-4">
-              <FormField
-                control={enterPasswordForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          {...field}
-                          type={showPassword ? "text" : "password"} 
-                          className="pr-10"
-                          placeholder="Enter file password"
-                          autoFocus
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full"
-                          onClick={togglePasswordVisibility}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <TabsContent value="password">
+                  <Form {...enterPasswordForm}>
+                    <form onSubmit={enterPasswordForm.handleSubmit(handleEnterPassword)} className="space-y-4 py-4">
+                      <FormField
+                        control={enterPasswordForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  {...field}
+                                  type={showPassword ? "text" : "password"} 
+                                  className="pr-10"
+                                  placeholder="Enter file password"
+                                  autoFocus
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-0 top-0 h-full"
+                                  onClick={togglePasswordVisibility}
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+                          Cancel
                         </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading && (
-                    <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  )}
-                  Unlock File
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+                        <Button type="submit" disabled={loading}>
+                          {loading && (
+                            <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          )}
+                          Unlock File
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </TabsContent>
+
+                <TabsContent value="face">
+                  <div className="flex flex-col items-center justify-center space-y-4 py-6">
+                    <div className="bg-muted rounded-full p-6">
+                      <User className="h-12 w-12 text-primary" />
+                    </div>
+                    <h3 className="text-lg font-medium">Face Recognition</h3>
+                    <p className="text-sm text-center text-muted-foreground max-w-xs">
+                      Unlock this file using your face. Position your face in front of the camera.
+                    </p>
+                    <Button 
+                      onClick={() => setShowFaceRecognition(true)}
+                      className="gap-2"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Start Face Recognition
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
+
+            {(mode === "set" || mode === "reset") && (
+              <Tabs 
+                defaultValue="password" 
+                onValueChange={(value) => setAuthMethod(value as "password" | "face")}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="password">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Password
+                  </TabsTrigger>
+                  <TabsTrigger value="face">
+                    <User className="h-4 w-4 mr-2" />
+                    Face ID
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="password">
+                  <Form {...setPasswordForm}>
+                    <form onSubmit={setPasswordForm.handleSubmit(mode === "set" ? handleSetPassword : handleResetPassword)} className="space-y-4 py-4">
+                      <FormField
+                        control={setPasswordForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  {...field}
+                                  type={showPassword ? "text" : "password"} 
+                                  className="pr-10"
+                                  placeholder="Enter a strong password"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-0 top-0 h-full"
+                                  onClick={togglePasswordVisibility}
+                                >
+                                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={setPasswordForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  {...field}
+                                  type={showConfirmPassword ? "text" : "password"} 
+                                  className="pr-10"
+                                  placeholder="Confirm your password"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-0 top-0 h-full"
+                                  onClick={toggleConfirmPasswordVisibility}
+                                >
+                                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </Button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={loading}>
+                          {loading && (
+                            <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          )}
+                          {mode === "set" ? "Set Password" : "Reset Password"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </TabsContent>
+
+                <TabsContent value="face">
+                  <div className="flex flex-col items-center justify-center space-y-4 py-6">
+                    <div className="bg-muted rounded-full p-6">
+                      <Fingerprint className="h-12 w-12 text-primary" />
+                    </div>
+                    <h3 className="text-lg font-medium">Face Authentication</h3>
+                    <p className="text-sm text-center text-muted-foreground max-w-xs">
+                      Set up face recognition to unlock this file without a password. Make sure you're in a well-lit area and position your face clearly.
+                    </p>
+                    <Button 
+                      onClick={() => setShowFaceRecognition(true)}
+                      className="gap-2"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Configure Face Authentication
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

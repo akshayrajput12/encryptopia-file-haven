@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useFiles } from "@/hooks/useFiles";
 import { FileItem } from "@/lib/supabase";
@@ -16,6 +15,8 @@ import {
   Info,
   KeyRound,
   Shield,
+  User,
+  Fingerprint,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -64,10 +65,10 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
 
   const isFolder = file.type === "folder";
   const isPasswordProtected = file.metadata?.isPasswordProtected === true;
+  const isFaceProtected = file.metadata?.faceProtected === true;
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    
     
     if (isPasswordProtected) {
       setPasswordForAction("download");
@@ -122,7 +123,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     setDecryptedFile(decrypted);
     
     if (passwordForAction === "download") {
-      // Create download link
       const url = URL.createObjectURL(decrypted);
       const a = document.createElement('a');
       a.href = url;
@@ -133,7 +133,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
       URL.revokeObjectURL(url);
       setEnterPasswordDialog(false);
     } else {
-      // For preview
       setPreviewDialog(true);
     }
     
@@ -145,7 +144,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     setLoading(true);
     
     try {
-      // Use the new previewFile function from useFiles hook
       const result = await previewFile(file.id);
       
       if (result.success && result.decryptedFile) {
@@ -162,7 +160,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
     }
   };
 
-  
   if (isFolder) {
     return (
       <DropdownMenu>
@@ -233,15 +230,22 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
             Details
           </DropdownMenuItem>
           
-         
           <DropdownMenuSeparator />
           
-          {isPasswordProtected ? (
+          {isPasswordProtected || isFaceProtected ? (
             <>
-              <DropdownMenuItem className="text-amber-500">
-                <Lock className="mr-2 h-4 w-4" />
-                Password Protected
-              </DropdownMenuItem>
+              {isPasswordProtected && (
+                <DropdownMenuItem className="text-amber-500">
+                  <Lock className="mr-2 h-4 w-4" />
+                  Password Protected
+                </DropdownMenuItem>
+              )}
+              {isFaceProtected && (
+                <DropdownMenuItem className="text-blue-500">
+                  <User className="mr-2 h-4 w-4" />
+                  Face Protected
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -249,7 +253,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
                 }}
               >
                 <KeyRound className="mr-2 h-4 w-4" />
-                Reset Password
+                Reset Security
               </DropdownMenuItem>
             </>
           ) : (
@@ -260,7 +264,7 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
               }}
             >
               <Shield className="mr-2 h-4 w-4" />
-              Set Password
+              Set Security
             </DropdownMenuItem>
           )}
           
@@ -278,7 +282,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Delete confirmation dialog */}
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
           <DialogHeader>
@@ -306,7 +309,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Share dialog */}
       <Dialog open={shareDialog} onOpenChange={setShareDialog}>
         <DialogContent>
           <DialogHeader>
@@ -367,7 +369,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Metadata dialog */}
       <Dialog open={metadataDialog} onOpenChange={setMetadataDialog}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -428,7 +429,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
                   </div>
                 </div>
 
-                {/* Shared users */}
                 {metadata.file_shares && metadata.file_shares.length > 0 && (
                   <div>
                     <h3 className="text-sm font-medium mb-2">Shared with</h3>
@@ -461,7 +461,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
                 )}
               </>
             ) : (
-              // Loading state
               <div className="space-y-2">
                 <div className="h-4 bg-muted rounded animate-pulse"></div>
                 <div className="h-4 bg-muted rounded animate-pulse"></div>
@@ -472,7 +471,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Set password dialog */}
       <PasswordProtection 
         file={file}
         isOpen={passwordDialog}
@@ -480,7 +478,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         mode="set"
       />
 
-      {/* Enter password dialog */}
       <PasswordProtection 
         file={file}
         isOpen={enterPasswordDialog}
@@ -492,7 +489,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         mode="enter"
       />
 
-      {/* Reset password dialog */}
       <PasswordProtection 
         file={file}
         isOpen={resetPasswordDialog}
@@ -500,7 +496,6 @@ export function FileActions({ file, isCompact = false }: FileActionsProps) {
         mode="reset"
       />
 
-      {/* File preview dialog */}
       {decryptedFile && (
         <Dialog open={previewDialog} onOpenChange={setPreviewDialog}>
           <DialogContent className="sm:max-w-4xl">
