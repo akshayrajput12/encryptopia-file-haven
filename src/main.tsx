@@ -12,12 +12,15 @@ async function preloadModels() {
     // Set custom model path
     const MODEL_URL = '/models';
 
-    // Load models
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
+    // Load models synchronously one by one to avoid simultaneous loading issues
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    console.log("Tiny face detector model loaded");
+    
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    console.log("Face landmark model loaded");
+    
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    console.log("Face recognition model loaded");
     
     console.log("Face-api.js models preloaded successfully");
   } catch (error) {

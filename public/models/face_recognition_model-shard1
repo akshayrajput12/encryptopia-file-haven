@@ -1,3 +1,4 @@
 
-// This is a placeholder for the actual face recognition model file.
-// The actual model files need to be downloaded and placed in this directory.
+// This file should contain the first shard of the face recognition model binary data.
+// In a real application, you would download this file from the face-api.js repository.
+// For development purposes, this placeholder indicates where the real model file should be placed.

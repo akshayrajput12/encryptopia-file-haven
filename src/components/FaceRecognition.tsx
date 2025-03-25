@@ -27,15 +27,13 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
     const loadModels = async () => {
       setIsModelLoading(true);
       try {
-        // Fix the model loading by using exact paths to the model files
-        const MODEL_URL = '/models';
-        
-        // Load models with explicit file extensions
+        // Specify the correct path to models - make sure to use *.json suffix
         await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(`${MODEL_URL}`),
-          faceapi.nets.faceLandmark68Net.loadFromUri(`${MODEL_URL}`),
-          faceapi.nets.faceRecognitionNet.loadFromUri(`${MODEL_URL}`),
+          faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+          faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+          faceapi.nets.faceRecognitionNet.loadFromUri('/models')
         ]);
+        
         setIsModelLoading(false);
         console.log("Models loaded successfully");
       } catch (error) {
@@ -145,8 +143,6 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
           }
         } catch (error) {
           console.error("Error in face detection:", error);
-          // Don't show toast here to avoid spamming
-          // Just continue detection
         }
       }
       
@@ -206,7 +202,7 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
             const faceDescriptor = faces[0].descriptor;
             onCapture(faceDescriptor);
           }
-          // Return the faces array to satisfy TypeScript (even though we don't use the return value)
+          // Return faces to fix TypeScript error
           return faces;
         })
         .catch(error => {

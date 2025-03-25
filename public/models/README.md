@@ -1,27 +1,38 @@
 
-# Face-API.js Models
+# Face Recognition Model Files
 
-This directory should contain the model files required for face-api.js to function.
+This directory contains the model files required by face-api.js for face detection, recognition, and landmark detection.
 
-## Required Model Files
+## Required Files
 
-You need to download the following model files from the face-api.js GitHub repository:
+The following files should be present in this directory:
 
-1. `tiny_face_detector_model-shard1`
-2. `tiny_face_detector_model-weights_manifest.json`
-3. `face_landmark_68_model-shard1`
-4. `face_landmark_68_model-weights_manifest.json`
-5. `face_recognition_model-shard1`
-6. `face_recognition_model-shard2` (this model is split into two files)
-7. `face_recognition_model-weights_manifest.json`
+1. **TinyFaceDetector Model:**
+   - `tiny_face_detector_model-weights_manifest.json`
+   - `tiny_face_detector_model-shard1`
 
-## How to Download
+2. **Face Landmark Model:**
+   - `face_landmark_68_model-weights_manifest.json`
+   - `face_landmark_68_model-shard1`
 
-You can download these files from:
-https://github.com/justadudewhohacks/face-api.js/tree/master/weights
+3. **Face Recognition Model:**
+   - `face_recognition_model-weights_manifest.json`
+   - `face_recognition_model-shard1`
+   - `face_recognition_model-shard2`
 
-Place all the downloaded files directly in this directory (not in subdirectories).
+## How These Files Are Used
 
-## Important Note
+These model files are loaded by face-api.js when the application initializes. They provide the necessary weights and configuration for:
 
-The application will not work correctly without these model files. Make sure they are properly downloaded and placed in this directory.
+- Detecting faces in images or video
+- Identifying facial landmarks (68 points that mark facial features)
+- Generating face descriptors for face recognition
+
+## Troubleshooting
+
+If you encounter issues with face recognition:
+
+1. Make sure all model files are properly downloaded
+2. Check that file names match exactly what the code is expecting
+3. Ensure the manifest JSON files correctly point to their respective shard files
+4. Watch for console errors that might indicate missing or corrupted model files

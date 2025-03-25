@@ -1,3 +1,4 @@
 
-// This is a placeholder for the actual model file.
-// The actual model files need to be downloaded and placed in this directory.
+// This file should contain the actual binary data for the tiny face detector model.
+// In a real application, you would download this file from the face-api.js repository.
+// For development purposes, this placeholder indicates where the real model file should be placed.
