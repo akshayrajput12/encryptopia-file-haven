@@ -1,5 +1,4 @@
 
-import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Auth } from './components/Auth';
@@ -7,6 +6,7 @@ import { FileExplorer } from './components/FileExplorer';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { Toaster } from './components/ui/sonner';
 import { ThemeProvider } from './components/ThemeToggle';
+import NotFound from './pages/NotFound';
 import './App.css';
 
 // Protected route component
@@ -57,7 +57,10 @@ function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* Add a specific 404 route */}
+            <Route path="/404" element={<NotFound />} />
+            {/* Catch all unmatched routes and show the 404 page */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster />
         </AuthProvider>
