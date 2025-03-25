@@ -187,12 +187,21 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
         faceapi.detectAllFaces(
           videoRef.current, 
           new faceapi.TinyFaceDetectorOptions()
-        ).withFaceLandmarks().withFaceDescriptors()
-          .then(faces => {
-            if (faces.length > 0) {
-              onCapture(faces[0].descriptor);
-            }
-          });
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptors()
+        .then(faces => {
+          if (faces.length > 0) {
+            const faceDescriptor = faces[0].descriptor;
+            onCapture(faceDescriptor);
+          }
+          // Return the faces array to satisfy TypeScript (even though we don't use the return value)
+          return faces;
+        })
+        .catch(error => {
+          console.error("Error during face verification:", error);
+          toast.error("Face verification failed. Please try again.");
+        });
       }
     } else {
       toast.error("Face doesn't match. Please try again or use password.");
