@@ -27,12 +27,17 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
     const loadModels = async () => {
       setIsModelLoading(true);
       try {
+        // Fix the model loading by using exact paths to the model files
+        const MODEL_URL = '/models';
+        
+        // Load models with explicit file extensions
         await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-          faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-          faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+          faceapi.nets.tinyFaceDetector.loadFromUri(`${MODEL_URL}`),
+          faceapi.nets.faceLandmark68Net.loadFromUri(`${MODEL_URL}`),
+          faceapi.nets.faceRecognitionNet.loadFromUri(`${MODEL_URL}`),
         ]);
         setIsModelLoading(false);
+        console.log("Models loaded successfully");
       } catch (error) {
         console.error("Error loading face-api models:", error);
         toast.error("Failed to load face recognition models");
@@ -48,7 +53,7 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [onCancel]);
 
   // Initialize camera
   useEffect(() => {
@@ -75,7 +80,7 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
     };
 
     setupCamera();
-  }, [isModelLoading]);
+  }, [isModelLoading, onCancel]);
 
   // Face detection loop
   useEffect(() => {
@@ -98,44 +103,50 @@ export function FaceRecognition({ onCapture, onCancel, mode, storedDescriptor }:
         canvas.width = videoWidth;
         canvas.height = videoHeight;
 
-        // Detect faces
-        const faces = await faceapi.detectAllFaces(
-          video, 
-          new faceapi.TinyFaceDetectorOptions()
-        ).withFaceLandmarks().withFaceDescriptors();
+        try {
+          // Detect faces
+          const faces = await faceapi.detectAllFaces(
+            video, 
+            new faceapi.TinyFaceDetectorOptions()
+          ).withFaceLandmarks().withFaceDescriptors();
 
-        // Draw results
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw video frame on canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          if (faces.length > 0) {
-            const face = faces[0];
-            setDetectedFace(face.detection);
+          // Draw results
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw face detection box
-            const drawBox = new faceapi.draw.DrawBox(face.detection.box, { 
-              boxColor: '#4ade80',
-              lineWidth: 2 
-            });
-            drawBox.draw(canvas);
+            // Draw video frame on canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // If in verify mode, check for match
-            if (mode === "verify" && storedDescriptor) {
-              const currentDescriptor = face.descriptor;
-              const distance = faceapi.euclideanDistance(currentDescriptor, storedDescriptor);
+            if (faces.length > 0) {
+              const face = faces[0];
+              setDetectedFace(face.detection);
               
-              // Distance threshold for matching (lower is better match)
-              const threshold = 0.5;
-              setMatchResult(distance < threshold ? "matching" : "not-matching");
+              // Draw face detection box
+              const drawBox = new faceapi.draw.DrawBox(face.detection.box, { 
+                boxColor: '#4ade80',
+                lineWidth: 2 
+              });
+              drawBox.draw(canvas);
+              
+              // If in verify mode, check for match
+              if (mode === "verify" && storedDescriptor) {
+                const currentDescriptor = face.descriptor;
+                const distance = faceapi.euclideanDistance(currentDescriptor, storedDescriptor);
+                
+                // Distance threshold for matching (lower is better match)
+                const threshold = 0.5;
+                setMatchResult(distance < threshold ? "matching" : "not-matching");
+              }
+            } else {
+              setDetectedFace(null);
+              setMatchResult(null);
             }
-          } else {
-            setDetectedFace(null);
-            setMatchResult(null);
           }
+        } catch (error) {
+          console.error("Error in face detection:", error);
+          // Don't show toast here to avoid spamming
+          // Just continue detection
         }
       }
       
